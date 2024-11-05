@@ -15,7 +15,7 @@ class SystemHealthCheckervice:
         results = SystemHealthCheckBase(
             ping="pong", 
             message="the application is up and running", 
-            is_application_healthy=True,
+            status="ok",
         )
         return results
         

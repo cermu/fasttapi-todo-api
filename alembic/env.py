@@ -8,6 +8,7 @@ from alembic import context
 from src.db.db_setup import Base
 from src.todoitems.models import ToDoItem
 from src.todolists.models import ToDoList
+from src.auth.models import User
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

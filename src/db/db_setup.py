@@ -18,6 +18,7 @@ async def init_db():
     async with async_engine.begin() as conn:
         from src.todolists.models import ToDoList
         from src.todoitems.models import ToDoItem
+        from src.auth.models import User
         await conn.run_sync(Base.metadata.create_all)
 
 async def get_async_session():
