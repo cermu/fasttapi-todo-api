@@ -14,11 +14,29 @@ class UserService:
         self.session = session
     
     async def get_user_by_username(self, username: str):
+        """
+        Get a user by their username
+
+        Args:
+            username (str): provided username
+
+        Returns:
+            User: the newly created user
+        """
         query = select(User).where(User.username == username)
         results = await self.session.execute(query)
         return results.scalars().first()
     
     async def get_user_by_email(self, email: str):
+        """
+        Get a user by their email
+
+        Args:
+            email (str): provided email
+
+        Returns:
+            User: the newly created user
+        """
         query = select(User).where(User.email == email)
         results = await self.session.execute(query)
         return results.scalars().first()
@@ -58,7 +76,7 @@ class UserService:
     
     async def authenticate_user(self, username: str, password: str):
         """
-        Authenticat/login a user
+        Authenticate/login a user
 
         Args:
             username (str): user provided username
@@ -76,3 +94,14 @@ class UserService:
         if not verify_password(password, existing_user.password):
             return False
         return existing_user
+    
+    async def get_users(self, offset: int = 0, limit: int = 100):
+        """
+        Get a list of users
+
+        Returns:
+            list: list of users
+        """
+        query = select(User).offset(offset).limit(limit)
+        results = await self.session.execute(query)
+        return results.scalars().all()
