@@ -22,7 +22,9 @@ class UserSignUp(UserBase):
     email: EmailStr
     first_name: str
     last_name: str
+    role: str = "user"
     is_active: bool = True
+    is_verified: bool = False
 
 
 class UserLogin(UserBase):
@@ -35,7 +37,9 @@ class UserUpdate(BaseModel):
     password: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+    role: str | None = None
     is_active: bool | None = None
+    is_verified: bool | None = None
 
 
 class UserExist(BaseModel):
@@ -49,7 +53,9 @@ class User(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
+    role: str
     is_active: bool
+    is_verified: bool
     created_at: datetime
     updated_at: datetime
 

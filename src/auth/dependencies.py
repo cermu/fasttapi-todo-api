@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, List, Any
 from fastapi.security import HTTPBearer
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security.http import HTTPAuthorizationCredentials
@@ -100,3 +100,21 @@ async def get_current_active_user(current_user: Annotated[User, Depends(get_curr
             detail="user is inactive"
         )
     return current_user
+
+
+class RoleChecker:
+    def __init__(self, allowed_roles: List[str]) -> None:
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, current_user: User = Depends(get_current_active_user)) -> Any:
+        if not current_user.is_verified:
+            raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="user is not verified"
+        )
+        if current_user.role in self.allowed_roles:
+            return True
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="not enough permissions for this operation"
+        )

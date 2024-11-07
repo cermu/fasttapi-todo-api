@@ -9,7 +9,7 @@ from src.db.db_setup import get_async_session
 from .service import UserService
 from .schemas import UserSignUp, UserExist, User, Token, UserLogin
 from .utils import (create_access_token, create_refresh_token,)
-from .dependencies import AccessTokenBearer, RefreshTokenBearer, get_current_active_user
+from .dependencies import AccessTokenBearer, RefreshTokenBearer, get_current_active_user, RoleChecker
 from src.config import settings
 
 
@@ -81,7 +81,8 @@ async def read_users(
     offset: int = 0, 
     limit: int = 100, 
     session: AsyncSession = Depends(get_async_session),
-    _ = Depends(access_token_bearer)
+    _ = Depends(access_token_bearer),
+    allowed_admin: bool = Depends(RoleChecker(["admin"]))
 ):
     return await UserService(session).get_users(offset=offset, limit=limit)
 

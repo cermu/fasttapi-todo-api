@@ -21,7 +21,6 @@ app = FastAPI(
         "name": "smiling gopher",
         "email": "smilinggopher@dev.com"
     },
-    lifespan=lifespan,
 )
 
 app.include_router(todo_items_router, tags=["Todo items"], prefix=settings.API_PATH_PREFIX)
