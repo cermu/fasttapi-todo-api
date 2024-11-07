@@ -1,4 +1,5 @@
 import jwt
+from jwt.exceptions import PyJWTError
 from typing import Union, Any
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
@@ -33,7 +34,7 @@ def get_password_hash(password: str) -> str:
     """
     return pwd_context.hash(password)
 
-def create_access_token(subject: Union[str, Any], expires_delta: timedelta | None = None) -> str:
+def create_access_token(subject: Union[str, Any], expires_delta: timedelta | None = None, refresh: bool = False) -> str:
     """
     Create a JWT access token.
     Args:
@@ -48,11 +49,11 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta | Non
     else:
         expires = datetime.now(timezone.utc) + timedelta(minutes=5)
 
-    to_encode = {"exp": expires, "sub": str(subject)}
-    encoded_jwt = jwt.encode(to_encode, key=settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    to_encode = {"exp": expires, "sub": str(subject), "refresh": refresh}
+    encoded_jwt = jwt.encode(payload=to_encode, key=settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | None = None) -> str:
+def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | None = None, refresh: bool = False) -> str:
     """
     Create a JWT refresh token.
     Args:
@@ -67,7 +68,19 @@ def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | No
     else:
         expires = datetime.now(timezone.utc) + timedelta(minutes=10)
 
-    to_encode = {"exp": expires, "sub": str(subject)}
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, settings.ALGORITHM)
+    to_encode = {"exp": expires, "sub": str(subject), "refresh": refresh}
+    encoded_jwt = jwt.encode(payload=to_encode, key=settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+def decode_token(token: str):
+    try:
+        token_data = jwt.decode(
+            jwt=token,
+            key=settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        return token_data
+    except PyJWTError as e:
+        error_data = {"error": str(e)}
+        return error_data
     
