@@ -113,7 +113,7 @@ class RoleChecker:
             detail="user is not verified"
         )
         if current_user.role in self.allowed_roles:
-            return True
+            return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="not enough permissions for this operation"

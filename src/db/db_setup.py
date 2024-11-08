@@ -7,7 +7,7 @@ from src.config import settings
 Base = declarative_base()
 
 # Async configuration
-async_engine = create_async_engine(url=settings.POSTGRES_URL, echo=True, future=True)
+async_engine = create_async_engine(url=settings.POSTGRES_URL, echo=False, future=True)
 
 AsyncSessionLocal = sessionmaker(
     async_engine, class_=AsyncSession, expire_on_commit=False

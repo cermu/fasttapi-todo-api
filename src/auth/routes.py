@@ -82,10 +82,10 @@ async def read_users(
     limit: int = 100, 
     session: AsyncSession = Depends(get_async_session),
     _ = Depends(access_token_bearer),
-    allowed_admin: bool = Depends(RoleChecker(["admin"]))
+    allowed_admin: User = Depends(RoleChecker(["admin"]))
 ):
     return await UserService(session).get_users(offset=offset, limit=limit)
 
 @auth_router.get("/users/profile", response_model=User, status_code=status.HTTP_200_OK)
-async def get_user_profile(current_user: Annotated[User, Depends(get_current_active_user)]):
+async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))]):
     return current_user
