@@ -4,6 +4,7 @@ from typing import Union, Any
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
+from itsdangerous import URLSafeTimedSerializer
 from src.config import settings
 
 
@@ -84,3 +85,18 @@ def decode_token(token: str):
         error_data = {"error": str(e)}
         return error_data
     
+serializer = URLSafeTimedSerializer(
+    secret_key=settings.SECRET_KEY,
+    salt="email-verification"
+)
+
+def create_url_safe_token(data: dict):
+    return serializer.dumps(data)
+
+def decode_url_safe_token(token: str):
+    try:
+        token_data = serializer.loads(token)
+        return token_data
+    except Exception as e:
+        print(f"Decoding url safe token failed with error: {str(e)}")
+        return None

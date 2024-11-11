@@ -1,4 +1,5 @@
 import uuid
+from typing import List
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
@@ -22,9 +23,6 @@ class UserSignUp(UserBase):
     email: EmailStr
     first_name: str
     last_name: str
-    role: str = "user"
-    is_active: bool = True
-    is_verified: bool = False
 
 
 class UserLogin(UserBase):
@@ -61,3 +59,12 @@ class User(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class UserSignUpResponse(BaseModel):
+    message: str
+    user: User
+
+
+class EmailModel(BaseModel):
+    addresses: List[str]

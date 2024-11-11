@@ -105,3 +105,19 @@ class UserService:
         query = select(User).offset(offset).limit(limit)
         results = await self.session.execute(query)
         return results.scalars().all()
+    
+    async def update_user(self, user: User, update_data: dict):
+        """
+        Update an existing user
+
+        Args:
+            user (User): an existing user object
+            update_data (dict): provided data ti update a user
+
+        Returns:
+            User: an updated user object
+        """
+        for k, v in update_data.items():
+            setattr(user, k, v)
+        await self.session.commit()
+        return user
