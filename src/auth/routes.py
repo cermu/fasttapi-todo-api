@@ -6,8 +6,15 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.db_setup import get_async_session
 from .service import UserService
-from .schemas import UserSignUp, UserExist, User, Token, UserLogin, EmailModel, UserSignUpResponse
-from .utils import (create_access_token, create_refresh_token, create_url_safe_token, decode_url_safe_token,)
+from .schemas import (
+    UserSignUp, UserExist, User, 
+    Token, UserLogin, EmailModel, 
+    UserSignUpResponse, PasswordResetRequest, PasswordResetConfirm,
+)
+from .utils import (
+    create_access_token, create_refresh_token, create_url_safe_token, 
+    decode_url_safe_token, get_password_hash
+)
 from .dependencies import AccessTokenBearer, RefreshTokenBearer, RoleChecker
 from src.config import settings
 from mail import create_message
@@ -18,7 +25,7 @@ access_token_bearer: AccessTokenBearer = AccessTokenBearer()
 refresh_token_bearer: RefreshTokenBearer = RefreshTokenBearer()
 
 
-@auth_router.post("/send_mail")
+@auth_router.post("/send-mail")
 async def send_mail(emails: EmailModel):
     emails = emails.addresses
     html = "<h1>Welcome to ToDO API</h1>"
@@ -49,14 +56,16 @@ async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_asy
     print(f"User sign up email verification message: {message}")
     print("===================================================")
 
-    return {
-        "message": "account created! Check email to verify your account.",
-        "user": results
-    }
+    return JSONResponse(
+        content={
+            "message": "account created! Check email to verify your account.",
+            "user": results
+        },
+        status_code=status.HTTP_200_OK
+    )
 
 @auth_router.get("/verify/{token}", status_code=status.HTTP_200_OK)
 async def verify_usre_account(token: str, session: AsyncSession = Depends(get_async_session)):
-    # http://localhost:8080/todo-api/v1/auth/verify/eyJlbWFpbCI6InlvbW90aTM0NThAYW55cG5nLmNvbSJ9.ZzIAqw.-zWLwO7gx7v4hRx_X3aO4Kb8FzE
     token_data = decode_url_safe_token(token)
     if token_data is None:
         raise HTTPException(
@@ -111,7 +120,7 @@ async def revoke_token(
     
     return JSONResponse(content={"message": "logged out functionality coming soon"}, status_code=status.HTTP_200_OK)
 
-@auth_router.get("/refresh_token", status_code=status.HTTP_200_OK)
+@auth_router.get("/refresh-token", status_code=status.HTTP_200_OK)
 async def refresh_access_token(
     token_details=Depends(refresh_token_bearer)
 ):
@@ -144,3 +153,59 @@ async def read_users(
 @auth_router.get("/users/profile", response_model=User, status_code=status.HTTP_200_OK)
 async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))]):
     return current_user
+
+@auth_router.post("/password-reset")
+async def password_reset_request(email_data: PasswordResetRequest):
+    email = email_data.email
+    token = create_url_safe_token({"email": email})
+    link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/password-reset-confirm/{token}"
+    html_message = f"""
+    <h1>Reset Your Password</h1>
+    <p>Please click this <a href="{link}">linkk</a> to reset your password.</p>
+    """
+
+    message = create_message(recipients=[email], subject="Reset Your Password", body=html_message)
+    
+    # this is to be sent to the user's email but I am logging it for now.
+    print("===================================================")
+    print(f"Password reset emai message: {message}")
+    print("===================================================")
+
+    return JSONResponse(
+        content={
+            "message": "please check your email for instructions to reset your password."
+        },
+        status_code=status.HTTP_200_OK
+    )
+
+@auth_router.post("/password-reset-confirm/{token}")
+async def password_reset_request(token: str, password_data: PasswordResetConfirm, session: AsyncSession = Depends(get_async_session)):
+    new_password = password_data.new_password
+    confirm_password = password_data.confirm_new_paddword
+    token_data = decode_url_safe_token(token)
+
+    if new_password != confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="passwords do not match"
+        )
+    user_email = token_data.get("email")
+    error_message = token_data.get("error")
+    if user_email:
+        user = await UserService(session).get_user_by_email(user_email)
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="user not found or is inactive. If this is a mistake, please contact us for support."
+            )
+        
+        hashed_password = get_password_hash(new_password)
+        await UserService(session).update_user(user, {"password": hashed_password})
+        
+        return JSONResponse(
+            content={"message": "password has been reset successfully."}
+        )
+    return JSONResponse(
+        content={"message": error_message},
+        status_code=status.HTTP_400_BAD_REQUEST
+    )

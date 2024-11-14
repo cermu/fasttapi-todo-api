@@ -68,3 +68,12 @@ class UserSignUpResponse(BaseModel):
 
 class EmailModel(BaseModel):
     addresses: List[str]
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    new_password: str
+    confirm_new_paddword: str

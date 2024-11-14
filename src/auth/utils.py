@@ -98,5 +98,4 @@ def decode_url_safe_token(token: str):
         token_data = serializer.loads(token)
         return token_data
     except Exception as e:
-        print(f"Decoding url safe token failed with error: {str(e)}")
-        return None
+        return {"error": str(e)}
