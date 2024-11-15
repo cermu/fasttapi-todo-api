@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     API_DESCRIPTION: str
     SECRET_KEY: str
     ALGORITHM: str
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_PASS: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_MINUTES: int
     API_BASE_URL: str

@@ -4,6 +4,7 @@ from fastapi import Request, HTTPException, status, Depends
 from fastapi.security.http import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.db_setup import get_async_session
+from src.db.redis import is_token_id_in_blocklist
 from .service import UserService
 from .models import User
 from .utils import decode_token
@@ -21,12 +22,24 @@ class TokenBearer(HTTPBearer):
         if not token_data:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="invalid or expired token"
+                detail="invalid or expired token, please get a new token."
             )
         if token_data.get("error"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=token_data.get("error")
+            )
+        
+        is_token_id_in_blocklist_results = await is_token_id_in_blocklist(token_data.get("token_id"))
+        if is_token_id_in_blocklist_results.get("error"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=is_token_id_in_blocklist_results.get("error")
+            )
+        if is_token_id_in_blocklist_results.get("results"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="invalid or revoked token, please get a new token."
             )
         
         self.verify_token_data(token_data)

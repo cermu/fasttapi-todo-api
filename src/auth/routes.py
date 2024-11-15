@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.db_setup import get_async_session
+from src.db.redis import add_token_id_to_blocklist
 from .service import UserService
 from .schemas import (
     UserSignUp, UserExist, User, 
@@ -102,7 +103,7 @@ async def user_login(login_data: UserLogin, session: AsyncSession = Depends(get_
         )
     return Token(
         access_token=create_access_token(results.username, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
-        refresh_token=create_refresh_token(results.username, expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES), refresh=True),
+        refresh_token=create_refresh_token(results.username, expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)),
         token_type="bearer"
     )
 
@@ -110,15 +111,15 @@ async def user_login(login_data: UserLogin, session: AsyncSession = Depends(get_
 async def revoke_token(
     token_details=Depends(access_token_bearer)
 ):
-    expiry_time = token_details.get("exp")
-    user_name = token_details.get("sub")
-    if not expiry_time or not user_name:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invalid or expired token"
-        )
+    token_id = token_details.get("token_id")
+    token_blocked = await add_token_id_to_blocklist(token_id)
     
-    return JSONResponse(content={"message": "logged out functionality coming soon"}, status_code=status.HTTP_200_OK)
+    if token_blocked.get("error"):
+        raise JSONResponse(
+            content={"message": f"an error occurred while logging out: {token_blocked.get("error")}"},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    return JSONResponse(content={"message": "logged out successfully"}, status_code=status.HTTP_200_OK)
 
 @auth_router.get("/refresh-token", status_code=status.HTTP_200_OK)
 async def refresh_access_token(

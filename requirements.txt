@@ -2,6 +2,7 @@ aiosmtplib==2.0.2
 alembic==1.13.3
 annotated-types==0.7.0
 anyio==4.6.2.post1
+async-timeout==5.0.1
 asyncpg==0.30.0
 bcrypt==4.2.0
 blinker==1.8.2
@@ -39,6 +40,7 @@ PyJWT==2.9.0
 python-dotenv==1.0.1
 python-multipart==0.0.17
 PyYAML==6.0.2
+redis==5.2.0
 rich==13.9.4
 rsa==4.9
 shellingham==1.5.4

@@ -1,4 +1,5 @@
 import jwt
+import uuid
 from jwt.exceptions import PyJWTError
 from typing import Union, Any
 from fastapi.security import OAuth2PasswordBearer
@@ -50,11 +51,11 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta | Non
     else:
         expires = datetime.now(timezone.utc) + timedelta(minutes=5)
 
-    to_encode = {"exp": expires, "sub": str(subject), "refresh": refresh}
+    to_encode = {"token_id": str(uuid.uuid4()), "exp": expires, "sub": str(subject), "refresh": refresh}
     encoded_jwt = jwt.encode(payload=to_encode, key=settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | None = None, refresh: bool = False) -> str:
+def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | None = None, refresh: bool = True) -> str:
     """
     Create a JWT refresh token.
     Args:
@@ -69,7 +70,7 @@ def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | No
     else:
         expires = datetime.now(timezone.utc) + timedelta(minutes=10)
 
-    to_encode = {"exp": expires, "sub": str(subject), "refresh": refresh}
+    to_encode = {"token_id": str(uuid.uuid4()), "exp": expires, "sub": str(subject), "refresh": refresh}
     encoded_jwt = jwt.encode(payload=to_encode, key=settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
