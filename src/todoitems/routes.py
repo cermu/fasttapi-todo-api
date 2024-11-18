@@ -6,13 +6,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.db_setup import get_async_session
 from .schemas import ToDoItemCreate, ToDoItem, ToDoItemUpdate
 from .service import ToDoItemService
+from src.utils.errors import (
+    InternalServerErrorException,
+)
 
 todo_items_router = fastapi.APIRouter(prefix="/todoitems")
 
 
 @todo_items_router.get("/", response_model=List[ToDoItem], status_code=status.HTTP_200_OK)
 async def read_todo_items(skip: int = 0, limit: int = 100, session: AsyncSession = Depends(get_async_session)):
-    return await ToDoItemService(session).get_todo_items(skip=skip, limit=limit)
+    try:
+        return await ToDoItemService(session).get_todo_items(skip=skip, limit=limit)
+    except Exception as e:
+        print("===================================")
+        print(f"Request processing error: {str(e)}")
+        print("===================================")
+        raise InternalServerErrorException()
 
 @todo_items_router.post("/", response_model=ToDoItem, status_code=status.HTTP_201_CREATED)
 async def create_new_todo_item(item: ToDoItemCreate, session: AsyncSession = Depends(get_async_session)):

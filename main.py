@@ -1,19 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from contextlib import asynccontextmanager
+# from contextlib import asynccontextmanager
 from src.todolists.routes import todo_list_router
 from src.todoitems.routes import todo_items_router
 from src.systemcheck.routes import system_health_router
 from src.auth.routes import auth_router
-from src.db.db_setup import init_db
-from src.config import settings
+# from src.db.db_setup import init_db
+from src.utils.config import settings
+from src.utils.errors import register_custom_errors
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db()
-    yield
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     await init_db()
+#     yield
 
 description = """
 A REST API for managing ToDo list and items.
@@ -50,6 +51,8 @@ app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=["localhost", "127.0.0.1"],
 )
+
+register_custom_errors(app)
 
 app.include_router(todo_items_router, tags=["Todo items"], prefix=settings.API_PATH_PREFIX)
 app.include_router(todo_list_router, tags=["Todo lists"], prefix=settings.API_PATH_PREFIX)

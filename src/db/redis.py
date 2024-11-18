@@ -1,5 +1,5 @@
 import redis.asyncio as aioredis
-from src.config import settings
+from src.utils.config import settings
 
 TOKEN_ID_EXPIRY = 1200
 

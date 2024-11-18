@@ -8,6 +8,16 @@ from src.db.redis import is_token_id_in_blocklist
 from .service import UserService
 from .models import User
 from .utils import decode_token
+from src.utils.errors import (
+    InvalidTokenException,
+    RevokedTokenException,
+    AccessTokenRequiredException,
+    RefreshTokenRequiredException,
+    InsufficientPermissionException,
+    UnverifiedUserException,
+    InactiveUSerException,
+    InvalidTokenDataException,
+)
 
 
 class TokenBearer(HTTPBearer):
@@ -20,13 +30,10 @@ class TokenBearer(HTTPBearer):
         token_data = self.token_valid(token)
 
         if not token_data:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="invalid or expired token, please get a new token."
-            )
+            raise InvalidTokenException()
         if token_data.get("error"):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=token_data.get("error")
             )
         
@@ -37,10 +44,7 @@ class TokenBearer(HTTPBearer):
                 detail=is_token_id_in_blocklist_results.get("error")
             )
         if is_token_id_in_blocklist_results.get("results"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="invalid or revoked token, please get a new token."
-            )
+            raise RevokedTokenException()
         
         self.verify_token_data(token_data)
         return token_data
@@ -56,19 +60,13 @@ class TokenBearer(HTTPBearer):
 class AccessTokenBearer(TokenBearer):
     def verify_token_data(self, token_data: dict) -> None:
         if token_data and token_data.get("refresh"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="please provide an access token"
-            )
+            raise AccessTokenRequiredException()
 
 
 class RefreshTokenBearer(TokenBearer):
     def verify_token_data(self, token_data: dict) -> None:
         if token_data and not token_data.get("refresh"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="please provide a refresh token"
-            )
+            raise RefreshTokenRequiredException()
 
 
 async def get_current_user(
@@ -84,18 +82,13 @@ async def get_current_user(
     Returns:
         A user: User
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"}
-    )
     username: str = token_details.get("sub")
     if not username:
-        raise credentials_exception
+        raise InvalidTokenDataException()
     
     user = await UserService(session).get_user_by_username(username=username)
     if not user:
-        raise credentials_exception
+        raise InvalidTokenDataException()
     return user
 
 async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]):
@@ -108,10 +101,7 @@ async def get_current_active_user(current_user: Annotated[User, Depends(get_curr
         A user: User
     """
     if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="user is inactive"
-        )
+        raise InactiveUSerException()
     return current_user
 
 
@@ -121,13 +111,7 @@ class RoleChecker:
 
     def __call__(self, current_user: User = Depends(get_current_active_user)) -> Any:
         if not current_user.is_verified:
-            raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="user is not verified"
-        )
+            raise UnverifiedUserException()
         if current_user.role in self.allowed_roles:
             return current_user
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="not enough permissions for this operation"
-        )
+        raise InsufficientPermissionException()

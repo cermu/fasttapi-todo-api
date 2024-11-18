@@ -17,8 +17,16 @@ from .utils import (
     decode_url_safe_token, get_password_hash
 )
 from .dependencies import AccessTokenBearer, RefreshTokenBearer, RoleChecker
-from src.config import settings
-from mail import create_message
+from src.utils.config import settings
+from src.utils.mail import create_message
+from src.utils.errors import (
+    InvalidCredentialsException,
+    InvalidTokenException,
+    InvalidVerifyTokenDataException,
+    ResourceNotFoundException,
+    PasswordsMismatchException,
+    UserInactiveOrNotFoundException,
+)
 
 
 auth_router = fastapi.APIRouter(prefix="/auth")
@@ -26,7 +34,7 @@ access_token_bearer: AccessTokenBearer = AccessTokenBearer()
 refresh_token_bearer: RefreshTokenBearer = RefreshTokenBearer()
 
 
-@auth_router.post("/send-mail")
+@auth_router.post("/send-mail", status_code=status.HTTP_200_OK)
 async def send_mail(emails: EmailModel):
     emails = emails.addresses
     html = "<h1>Welcome to ToDO API</h1>"
@@ -66,29 +74,23 @@ async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_asy
     )
 
 @auth_router.get("/verify/{token}", status_code=status.HTTP_200_OK)
-async def verify_usre_account(token: str, session: AsyncSession = Depends(get_async_session)):
+async def verify_user_account(token: str, session: AsyncSession = Depends(get_async_session)):
     token_data = decode_url_safe_token(token)
     if token_data is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="invalid verification token"
-        )
+        raise InvalidVerifyTokenDataException()
     
     user_email = token_data.get("email")
 
     if user_email:
         user = await UserService(session).get_user_by_email(user_email)
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="user not found"
-            )
+            raise ResourceNotFoundException()
         await UserService(session).update_user(user, {"is_verified": True})
         return JSONResponse(
             content={"message": "account verified successfully"}
         )
     return JSONResponse(
-        content={"message": "account verification failed."},
+        content={"message": "account verification failed.", "error_code": "CE016"},
         status_code=status.HTTP_400_BAD_REQUEST
     )
 
@@ -96,11 +98,7 @@ async def verify_usre_account(token: str, session: AsyncSession = Depends(get_as
 async def user_login(login_data: UserLogin, session: AsyncSession = Depends(get_async_session)):
     results = await UserService(session).authenticate_user(username=login_data.username, password=login_data.password)
     if not results:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+        raise InvalidCredentialsException()
     return Token(
         access_token=create_access_token(results.username, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
         refresh_token=create_refresh_token(results.username, expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)),
@@ -128,18 +126,12 @@ async def refresh_access_token(
     expiry_time = token_details.get("exp")
     user_name = token_details.get("sub")
     if not expiry_time or not user_name:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invalid or expired token"
-        )
+        raise InvalidTokenException()
     if datetime.fromtimestamp(expiry_time).replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
         new_access_token = create_access_token(user_name, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
         return JSONResponse(content={"access_token": new_access_token})
     
-    raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invalid or expired token"
-    )
+    raise InvalidTokenException()
 
 @auth_router.get("/users", response_model=List[User], status_code=status.HTTP_200_OK)
 async def read_users(
@@ -186,27 +178,22 @@ async def password_reset_request(token: str, password_data: PasswordResetConfirm
     token_data = decode_url_safe_token(token)
 
     if new_password != confirm_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="passwords do not match"
-        )
+        raise PasswordsMismatchException()
     user_email = token_data.get("email")
     error_message = token_data.get("error")
     if user_email:
         user = await UserService(session).get_user_by_email(user_email)
         if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="user not found or is inactive. If this is a mistake, please contact us for support."
-            )
+            raise UserInactiveOrNotFoundException()
         
         hashed_password = get_password_hash(new_password)
         await UserService(session).update_user(user, {"password": hashed_password})
         
         return JSONResponse(
-            content={"message": "password has been reset successfully."}
+            content={"message": "password has been reset successfully."},
+            status_code=status.HTTP_200
         )
     return JSONResponse(
-        content={"message": error_message},
+        content={"message": error_message, "error_code": "CE015"},
         status_code=status.HTTP_400_BAD_REQUEST
     )

@@ -42,7 +42,7 @@ class UserUpdate(BaseModel):
 
 class UserExist(BaseModel):
     message: str
-    status: str
+    error_code: str
 
 
 class User(BaseModel):

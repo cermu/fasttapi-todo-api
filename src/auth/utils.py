@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer
-from src.config import settings
+from src.utils.config import settings
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

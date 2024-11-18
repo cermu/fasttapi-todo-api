@@ -55,10 +55,10 @@ class UserService:
         email_exists = await self.get_user_by_email(user.email)
         
         if username_exists:
-            return UserExist(message="user with the provided data already exist", status="failed")
+            return UserExist(message="user with the provided data already exist", error_code="CE006")
         
         if email_exists:
-            return UserExist(message="user with the provided data already exist", status="failed")
+            return UserExist(message="user with the provided data already exist", error_code="CE006")
         
         hashed_password = get_password_hash(user.password)
         
