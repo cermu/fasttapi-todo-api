@@ -18,7 +18,7 @@ from .utils import (
 )
 from .dependencies import AccessTokenBearer, RefreshTokenBearer, RoleChecker
 from src.utils.config import settings
-from src.utils.mail import create_message
+from src.utils.celery_tasks import send_email
 from src.utils.errors import (
     InvalidCredentialsException,
     InvalidTokenException,
@@ -26,6 +26,7 @@ from src.utils.errors import (
     ResourceNotFoundException,
     PasswordsMismatchException,
     UserInactiveOrNotFoundException,
+    InternalServerErrorException,
 )
 
 
@@ -36,12 +37,17 @@ refresh_token_bearer: RefreshTokenBearer = RefreshTokenBearer()
 
 @auth_router.post("/send-mail", status_code=status.HTTP_200_OK)
 async def send_mail(emails: EmailModel):
-    emails = emails.addresses
-    html = "<h1>Welcome to ToDO API</h1>"
-    subject="Welcome"
-
-    message = create_message(recipients=emails, subject=subject, body=html)
-    return {"message": "email sent successfully", "content": message}
+    try:
+        emails = emails.addresses
+        html = "<h1>Welcome to ToDO API</h1>"
+        subject="Welcome"
+        send_email.delay(emails, subject, html)
+        return {"message": "email sent successfully"}
+    except Exception as e:
+        print("===================================")
+        print(f"Request processing error: {str(e)}")
+        print("===================================")
+        raise InternalServerErrorException()
 
 @auth_router.post("/signup", response_model=Union[UserSignUpResponse, UserExist], status_code=status.HTTP_201_CREATED)
 async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_async_session)):
@@ -55,23 +61,16 @@ async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_asy
     link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/verify/{token}"
     html_message = f"""
     <h1>Verify your Email</h1>
-    <p>Please click this <a href="{link}">linkk</a> to verify your email.</p>
+    <p>Please click this <a href="{link}">link</a> to verify your email.</p>
     """
-
-    message = create_message(recipients=[user.email], subject="Verify Email", body=html_message)
+    subject = "Verify Email"
     
-    # this is to be sent to the user's email but I am logging it for now.
-    print("===================================================")
-    print(f"User sign up email verification message: {message}")
-    print("===================================================")
+    send_email.delay([user.email], subject, html_message)
 
-    return JSONResponse(
-        content={
-            "message": "account created! Check email to verify your account.",
-            "user": results
-        },
-        status_code=status.HTTP_200_OK
-    )
+    return {
+        "message": "account created! Check email to verify your account.",
+        "user": results
+    }
 
 @auth_router.get("/verify/{token}", status_code=status.HTTP_200_OK)
 async def verify_user_account(token: str, session: AsyncSession = Depends(get_async_session)):
@@ -154,15 +153,11 @@ async def password_reset_request(email_data: PasswordResetRequest):
     link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/password-reset-confirm/{token}"
     html_message = f"""
     <h1>Reset Your Password</h1>
-    <p>Please click this <a href="{link}">linkk</a> to reset your password.</p>
+    <p>Please click this <a href="{link}">link</a> to reset your password.</p>
     """
-
-    message = create_message(recipients=[email], subject="Reset Your Password", body=html_message)
+    subject = "Password Reset Request"
     
-    # this is to be sent to the user's email but I am logging it for now.
-    print("===================================================")
-    print(f"Password reset emai message: {message}")
-    print("===================================================")
+    send_email.delay([email], subject, html_message)
 
     return JSONResponse(
         content={

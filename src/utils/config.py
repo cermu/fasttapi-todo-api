@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_MINUTES: int
     API_BASE_URL: str
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_PORT: int
+    MAIL_SERVER: str
+    MAIL_FROM_NAME: str
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
