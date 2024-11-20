@@ -1,19 +1,21 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from .models import User
-from .schemas import UserSignUp, UserUpdate, UserLogin, UserExist
-from src.auth.utils import verify_password, get_password_hash
-
+from .schemas import UserSignUp, UserUpdate, UserExist
+from .utils import (
+    get_password_hash, verify_password,
+    send_user_verification_email,
+)
 
 class UserService:
     """
     This class provides methods to create, read, update, and delete users
     """
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self):
+        pass
 
-    async def get_user_by_id(self, id: str):
+    async def get_user_by_id(self, session: AsyncSession, id: str):
         """
         Get a user by their id
 
@@ -24,10 +26,10 @@ class UserService:
             User: an existing user
         """
         query = select(User).where(User.id == id)
-        results = await self.session.execute(query)
+        results = await session.execute(query)
         return results.scalars().first()
     
-    async def get_user_by_username(self, username: str):
+    async def get_user_by_username(self, session: AsyncSession, username: str):
         """
         Get a user by their username
 
@@ -38,10 +40,10 @@ class UserService:
             User: an existing user
         """
         query = select(User).where(User.username == username)
-        results = await self.session.execute(query)
+        results = await session.execute(query)
         return results.scalars().first()
     
-    async def get_user_by_email(self, email: str):
+    async def get_user_by_email(self, session: AsyncSession, email: str):
         """
         Get a user by their email
 
@@ -52,10 +54,10 @@ class UserService:
             User: an existing user
         """
         query = select(User).where(User.email == email)
-        results = await self.session.execute(query)
+        results = await session.execute(query)
         return results.scalars().first()
     
-    async def create_user(self, user: UserSignUp):
+    async def create_user(self, session: AsyncSession, user: UserSignUp):
         """
         Create a new user
 
@@ -65,8 +67,8 @@ class UserService:
         Returns:
             User: the newly created user
         """
-        username_exists = await self.get_user_by_username(user.username)
-        email_exists = await self.get_user_by_email(user.email)
+        username_exists = await self.get_user_by_username(session, user.username)
+        email_exists = await self.get_user_by_email(session, user.email)
         
         if username_exists:
             return UserExist(message="user with the provided data already exist", error_code="CE006")
@@ -83,12 +85,12 @@ class UserService:
             first_name=user.first_name,
             last_name=user.last_name
         )
-        self.session.add(new_user)
-        await self.session.commit()
-        await self.session.refresh(new_user)
+        session.add(new_user)
+        await session.commit()
+        await session.refresh(new_user)
         return new_user
     
-    async def authenticate_user(self, username: str, password: str):
+    async def authenticate_user(self, session: AsyncSession, username: str, password: str):
         """
         Authenticate/login a user
 
@@ -100,7 +102,7 @@ class UserService:
             User: authenticated user
         """
         query = select(User).where(User.username == username)
-        results = await self.session.execute(query)
+        results = await session.execute(query)
         existing_user = results.scalars().first()
 
         if not existing_user:
@@ -109,7 +111,7 @@ class UserService:
             return False
         return existing_user
     
-    async def get_users(self, offset: int = 0, limit: int = 100):
+    async def get_users(self, session: AsyncSession, offset: int = 0, limit: int = 100):
         """
         Get a list of users
 
@@ -117,10 +119,10 @@ class UserService:
             list: list of users
         """
         query = select(User).offset(offset).limit(limit)
-        results = await self.session.execute(query)
+        results = await session.execute(query)
         return results.scalars().all()
     
-    async def update_user(self, user: User, update_data: dict):
+    async def update_user(self, session: AsyncSession, user: User, update_data: dict):
         """
         Update an existing user
 
@@ -133,5 +135,27 @@ class UserService:
         """
         for k, v in update_data.items():
             setattr(user, k, v)
-        await self.session.commit()
+        await session.commit()
         return user
+    
+    async def modify_user_logic(self, session: AsyncSession, send_verification_email: bool, existing_user: User, current_user: User, update_data: UserUpdate):
+        if current_user.role == "user":
+            update_data.role = existing_user.role
+            update_data.is_active = existing_user.is_active
+            update_data.is_verified = existing_user.is_verified
+        
+        if send_verification_email:
+            update_data.is_verified = False
+            await self.update_user(session, existing_user, update_data.model_dump(exclude_unset=True))
+
+            send_user_verification_email(email=update_data.email)
+            return {
+                "message": "user has been updated successfully! Check email to verify your account.",
+                "user": existing_user
+            }
+        
+        await self.update_user(session, existing_user, update_data.model_dump(exclude_unset=True))
+        return {
+            "message": "user has been updated successfully.",
+            "user": existing_user
+        }

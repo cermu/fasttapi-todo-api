@@ -19,6 +19,8 @@ from src.utils.errors import (
     InvalidTokenDataException,
 )
 
+user_service: UserService = UserService()
+
 
 class TokenBearer(HTTPBearer):
     def __init__(self, auto_error=True):
@@ -86,12 +88,12 @@ async def get_current_user(
     if not username:
         raise InvalidTokenDataException()
     
-    user = await UserService(session).get_user_by_username(username=username)
+    user = await user_service.get_user_by_username(session=session, username=username)
     if not user:
         raise InvalidTokenDataException()
     return user
 
-async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]):
+async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)], request: Request):
     """
     Get the current active authenticated user making a request.
     Args:
@@ -100,7 +102,8 @@ async def get_current_active_user(current_user: Annotated[User, Depends(get_curr
     Returns:
         A user: User
     """
-    if not current_user.is_active:
+    request_url = str(request.url)
+    if not current_user.is_active and "/auth/users/profile/activate" not in request_url:
         raise InactiveUSerException()
     return current_user
 

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer
 from src.utils.config import settings
+from src.utils.celery_tasks import send_email
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -100,3 +101,25 @@ def decode_url_safe_token(token: str):
         return token_data
     except Exception as e:
         return {"error": str(e)}
+
+def send_user_verification_email(email: str):
+    token = create_url_safe_token({"email": email})
+    link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/users/verify/{token}"
+    html_message = f"""
+    <h1>Verify your Email</h1>
+    <p>Please click this <a href="{link}">link</a> to verify your email.</p>
+    """
+    subject = "Verify Email"
+    
+    send_email.delay([email], subject, html_message)
+
+def send_password_reset_email(email: str):
+    token = create_url_safe_token({"email": email})
+    link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/users/password-reset-confirm/{token}"
+    html_message = f"""
+    <h1>Reset Your Password</h1>
+    <p>Please click this <a href="{link}">link</a> to reset your password.</p>
+    """
+    subject = "Password Reset Request"
+    
+    send_email.delay([email], subject, html_message)
