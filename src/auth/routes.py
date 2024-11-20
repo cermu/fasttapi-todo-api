@@ -11,6 +11,7 @@ from .schemas import (
     UserSignUp, UserExist, User, 
     Token, UserLogin, EmailModel, 
     UserSignUpResponse, PasswordResetRequest, PasswordResetConfirm,
+    UserUpdate, 
 )
 from .utils import (
     create_access_token, create_refresh_token, create_url_safe_token, 
@@ -49,7 +50,7 @@ async def send_mail(emails: EmailModel):
         print("===================================")
         raise InternalServerErrorException()
 
-@auth_router.post("/signup", response_model=Union[UserSignUpResponse, UserExist], status_code=status.HTTP_201_CREATED)
+@auth_router.post("/users/signup", response_model=Union[UserSignUpResponse, UserExist], status_code=status.HTTP_201_CREATED)
 async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_async_session)):
     results = await UserService(session).create_user(user)
     if not results:
@@ -58,7 +59,7 @@ async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_asy
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=results.model_dump())
     
     token = create_url_safe_token({"email": user.email})
-    link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/verify/{token}"
+    link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/users/verify/{token}"
     html_message = f"""
     <h1>Verify your Email</h1>
     <p>Please click this <a href="{link}">link</a> to verify your email.</p>
@@ -72,7 +73,7 @@ async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_asy
         "user": results
     }
 
-@auth_router.get("/verify/{token}", status_code=status.HTTP_200_OK)
+@auth_router.get("/users/verify/{token}", status_code=status.HTTP_200_OK)
 async def verify_user_account(token: str, session: AsyncSession = Depends(get_async_session)):
     token_data = decode_url_safe_token(token)
     if token_data is None:
@@ -93,7 +94,7 @@ async def verify_user_account(token: str, session: AsyncSession = Depends(get_as
         status_code=status.HTTP_400_BAD_REQUEST
     )
 
-@auth_router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
+@auth_router.post("/users/login", response_model=Token, status_code=status.HTTP_200_OK)
 async def user_login(login_data: UserLogin, session: AsyncSession = Depends(get_async_session)):
     results = await UserService(session).authenticate_user(username=login_data.username, password=login_data.password)
     if not results:
@@ -104,7 +105,7 @@ async def user_login(login_data: UserLogin, session: AsyncSession = Depends(get_
         token_type="bearer"
     )
 
-@auth_router.get("/logout")
+@auth_router.get("/users/logout")
 async def revoke_token(
     token_details=Depends(access_token_bearer)
 ):
@@ -118,7 +119,7 @@ async def revoke_token(
         )
     return JSONResponse(content={"message": "logged out successfully"}, status_code=status.HTTP_200_OK)
 
-@auth_router.get("/refresh-token", status_code=status.HTTP_200_OK)
+@auth_router.get("/users/refresh-token", status_code=status.HTTP_200_OK)
 async def refresh_access_token(
     token_details=Depends(refresh_token_bearer)
 ):
@@ -146,11 +147,11 @@ async def read_users(
 async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))]):
     return current_user
 
-@auth_router.post("/password-reset")
+@auth_router.post("/users/password-reset")
 async def password_reset_request(email_data: PasswordResetRequest):
     email = email_data.email
     token = create_url_safe_token({"email": email})
-    link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/password-reset-confirm/{token}"
+    link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/users/password-reset-confirm/{token}"
     html_message = f"""
     <h1>Reset Your Password</h1>
     <p>Please click this <a href="{link}">link</a> to reset your password.</p>
@@ -166,7 +167,7 @@ async def password_reset_request(email_data: PasswordResetRequest):
         status_code=status.HTTP_200_OK
     )
 
-@auth_router.post("/password-reset-confirm/{token}")
+@auth_router.post("/users/password-reset-confirm/{token}")
 async def password_reset_request(token: str, password_data: PasswordResetConfirm, session: AsyncSession = Depends(get_async_session)):
     new_password = password_data.new_password
     confirm_password = password_data.confirm_new_paddword
@@ -192,3 +193,60 @@ async def password_reset_request(token: str, password_data: PasswordResetConfirm
         content={"message": error_message, "error_code": "CE015"},
         status_code=status.HTTP_400_BAD_REQUEST
     )
+
+@auth_router.get("/users/{id}", response_model=User, status_code=status.HTTP_200_OK)
+async def get_user_profile(id: str, _: Annotated[User, Depends(RoleChecker(["admin"]))], session: AsyncSession = Depends(get_async_session)):
+    existing_user = await UserService(session).get_user_by_id(id)
+    if not existing_user:
+        raise ResourceNotFoundException()
+    
+    return existing_user
+
+@auth_router.put("/users/{id}", response_model=UserSignUpResponse, status_code=status.HTTP_200_OK)
+async def modify_user(id: str, current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))], update_data: UserUpdate, session: AsyncSession = Depends(get_async_session)):
+    existing_user = await UserService(session).get_user_by_id(id)
+    send_verification_email = False
+
+    if not existing_user:
+        raise ResourceNotFoundException()
+    
+    # check if a new email is being set and if it is unique
+    if update_data.email != existing_user.email:
+        send_verification_email = True
+        email_exists = await UserService(session).get_user_by_email(update_data.email)
+        if email_exists:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail={
+                    "message": "user with the provided data already exist",
+                    "error_code": "CE006"
+                }
+            )
+    if current_user.role == "user":
+        update_data.role = existing_user.role
+        update_data.is_active = existing_user.is_active
+        update_data.is_verified = existing_user.is_verified
+    
+    if send_verification_email:
+        update_data.is_verified = False
+        await UserService(session).update_user(existing_user, update_data.model_dump(exclude_unset=True))
+
+        token = create_url_safe_token({"email": update_data.email})
+        link = f"http://{settings.API_BASE_URL}{settings.API_PATH_PREFIX}/auth/users/verify/{token}"
+        html_message = f"""
+        <h1>Verify your Email</h1>
+        <p>Please click this <a href="{link}">link</a> to verify your email.</p>
+        """
+        subject = "Verify Email"
+        
+        send_email.delay([update_data.email], subject, html_message)
+        return {
+            "message": "user has been updated successfully! Check email to verify your account.",
+            "user": existing_user
+        }
+    
+    await UserService(session).update_user(existing_user, update_data.model_dump(exclude_unset=True))
+    return {
+        "message": "user has been updated successfully.",
+        "user": existing_user
+    }

@@ -206,7 +206,7 @@ def register_custom_errors(app: FastAPI):
     app.add_exception_handler(
         ResourceNotFoundException,
         create_exception_handler(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_404_NOT_FOUND,
             details={
                 "message": "resource not found",
                 "error_code": "CE012"

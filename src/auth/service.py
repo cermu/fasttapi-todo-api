@@ -12,6 +12,20 @@ class UserService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def get_user_by_id(self, id: str):
+        """
+        Get a user by their id
+
+        Args:
+            id (str): provided user id
+
+        Returns:
+            User: an existing user
+        """
+        query = select(User).where(User.id == id)
+        results = await self.session.execute(query)
+        return results.scalars().first()
     
     async def get_user_by_username(self, username: str):
         """
@@ -21,7 +35,7 @@ class UserService:
             username (str): provided username
 
         Returns:
-            User: the newly created user
+            User: an existing user
         """
         query = select(User).where(User.username == username)
         results = await self.session.execute(query)
@@ -35,7 +49,7 @@ class UserService:
             email (str): provided email
 
         Returns:
-            User: the newly created user
+            User: an existing user
         """
         query = select(User).where(User.email == email)
         results = await self.session.execute(query)
