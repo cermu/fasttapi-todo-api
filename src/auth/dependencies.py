@@ -38,13 +38,13 @@ class TokenBearer(HTTPBearer):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=token_data.get("error")
             )
-        
         is_token_id_in_blocklist_results = await is_token_id_in_blocklist(token_data.get("token_id"))
         if is_token_id_in_blocklist_results.get("error"):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=is_token_id_in_blocklist_results.get("error")
             )
+        
         if is_token_id_in_blocklist_results.get("results"):
             raise RevokedTokenException()
         

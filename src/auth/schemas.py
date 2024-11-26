@@ -25,6 +25,10 @@ class UserSignUp(UserBase):
     last_name: str
 
 
+class AdminSignUp(UserSignUp):
+    role: str = "admin"
+    is_verified: bool = True
+
 class UserLogin(UserBase):
     pass
 

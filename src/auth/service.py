@@ -1,7 +1,8 @@
+from typing import Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from .models import User
-from .schemas import UserSignUp, UserUpdate, UserExist
+from .schemas import UserSignUp, UserUpdate, UserExist, AdminSignUp
 from .utils import (
     get_password_hash, verify_password,
     send_user_verification_email,
@@ -57,7 +58,7 @@ class UserService:
         results = await session.execute(query)
         return results.scalars().first()
     
-    async def create_user(self, session: AsyncSession, user: UserSignUp):
+    async def create_user(self, session: AsyncSession, user: Union[UserSignUp, AdminSignUp]):
         """
         Create a new user
 
@@ -85,6 +86,10 @@ class UserService:
             first_name=user.first_name,
             last_name=user.last_name
         )
+        if isinstance(user, AdminSignUp):
+            new_user.role=user.role
+            new_user.is_verified=user.is_verified
+        
         session.add(new_user)
         await session.commit()
         await session.refresh(new_user)
@@ -159,3 +164,20 @@ class UserService:
             "message": "user has been updated successfully.",
             "user": existing_user
         }
+    
+    async def delete_user(self, session: AsyncSession, id: str):
+        """
+        Delete a user
+
+        Args:
+            id (str): the id of the user to delete
+        """
+        query = select(User).where(User.id == id)
+        results = await session.execute(query)
+        existing_user = results.scalars().first()
+
+        if not existing_user:
+            return {}
+        await session.delete(existing_user)
+        await session.commit()
+        return {}

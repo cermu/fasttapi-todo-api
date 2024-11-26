@@ -43,7 +43,5 @@ async def modify_todo_item(id: str, update_data: ToDoItemUpdate, session: AsyncS
 
 @todo_items_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def destroy_todo_item(id: str, session: AsyncSession = Depends(get_async_session)):
-    results = await ToDoItemService(session).delete_todo_item(id=id)
-    if results is None:
-        return
+    await ToDoItemService(session).delete_todo_item(id=id)
     return

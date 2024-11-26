@@ -92,7 +92,7 @@ class ToDoListService:
         existing_todo_list = results.scalars().first()
 
         if not existing_todo_list:
-            return None
+            return {}
         await self.session.delete(existing_todo_list)
         await self.session.commit()
         return {}

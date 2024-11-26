@@ -94,7 +94,7 @@ class ToDoItemService:
         existing_item = results.scalars().first()
 
         if not existing_item:
-            return None
+            return {}
         await self.session.delete(existing_item)
         await self.session.commit()
         return {}

@@ -11,7 +11,7 @@ from .schemas import (
     UserSignUp, UserExist, User, 
     Token, UserLogin, EmailModel, 
     UserSignUpResponse, PasswordResetRequest, PasswordResetConfirm,
-    UserUpdate, 
+    UserUpdate, AdminSignUp,
 )
 from .utils import (
     create_access_token, create_refresh_token, decode_url_safe_token, get_password_hash, send_user_verification_email, send_password_reset_email,
@@ -51,7 +51,7 @@ async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["a
     return current_user
 
 @auth_router.get("/users/profile/deactivate", response_model=UserSignUpResponse, status_code=status.HTTP_200_OK)
-async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))], token_details=Depends(access_token_bearer), session: AsyncSession = Depends(get_async_session)):
+async def deactivate_user_profile(current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))], token_details=Depends(access_token_bearer), session: AsyncSession = Depends(get_async_session)):
     results = await user_service.update_user(session=session, user=current_user, update_data={"is_active": False})
     token_id = token_details.get("token_id")
     token_blocked = await add_token_id_to_blocklist(token_id)
@@ -59,7 +59,10 @@ async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["a
     if token_blocked.get("error"):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail={"message": f"an error occurred while deactivating the user: {token_blocked.get("error")}"}
+            detail={
+                "message": f"an error occurred while deactivating the user: {token_blocked.get("error")}",
+                "error_code": "SE002"
+            }
         )
     return {
             "message": "user has been deactivated successfully.",
@@ -67,20 +70,29 @@ async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["a
         }
 
 @auth_router.get("/users/profile/activate", response_model=UserSignUpResponse, status_code=status.HTTP_200_OK)
-async def get_user_profile(current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))], session: AsyncSession = Depends(get_async_session)):
+async def activate_user_profile(current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))], session: AsyncSession = Depends(get_async_session)):
     results = await user_service.update_user(session=session, user=current_user, update_data={"is_active": True})
     return {
             "message": "user has been activated successfully.",
             "user": results
         }
 
-@auth_router.get("/users/{id}", response_model=User, status_code=status.HTTP_200_OK)
-async def get_user_profile(id: str, _: Annotated[User, Depends(RoleChecker(["admin"]))], session: AsyncSession = Depends(get_async_session)):
-    existing_user = await user_service.get_user_by_id(session=session, id=id)
-    if not existing_user:
-        raise ResourceNotFoundException()
+@auth_router.get("/users/logout")
+async def revoke_token(
+    token_details=Depends(access_token_bearer)
+):
+    token_id = token_details.get("token_id")
+    token_blocked = await add_token_id_to_blocklist(token_id)
     
-    return existing_user
+    if token_blocked.get("error"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail={
+                "message": f"an error occurred while logging out the user: {token_blocked.get("error")}",
+                "error_code": "SE002"
+            }
+        )
+    return JSONResponse(content={"message": "logged out successfully"}, status_code=status.HTTP_200_OK)
 
 @auth_router.get("/users/refresh-token", status_code=status.HTTP_200_OK)
 async def refresh_access_token(
@@ -88,6 +100,7 @@ async def refresh_access_token(
 ):
     expiry_time = token_details.get("exp")
     user_name = token_details.get("sub")
+    
     if not expiry_time or not user_name:
         raise InvalidTokenException()
     if datetime.fromtimestamp(expiry_time).replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
@@ -95,6 +108,14 @@ async def refresh_access_token(
         return JSONResponse(content={"access_token": new_access_token})
     
     raise InvalidTokenException()
+
+@auth_router.get("/users/{id}", response_model=User, status_code=status.HTTP_200_OK)
+async def get_user(id: str, _: Annotated[User, Depends(RoleChecker(["admin"]))], session: AsyncSession = Depends(get_async_session)):
+    existing_user = await user_service.get_user_by_id(session=session, id=id)
+    if not existing_user:
+        raise ResourceNotFoundException()
+    
+    return existing_user
 
 @auth_router.get("/users/verify/{token}", status_code=status.HTTP_200_OK)
 async def verify_user_account(token: str, session: AsyncSession = Depends(get_async_session)):
@@ -116,20 +137,6 @@ async def verify_user_account(token: str, session: AsyncSession = Depends(get_as
         content={"message": "account verification failed.", "error_code": "CE016"},
         status_code=status.HTTP_400_BAD_REQUEST
     )
-
-@auth_router.get("/users/logout")
-async def revoke_token(
-    token_details=Depends(access_token_bearer)
-):
-    token_id = token_details.get("token_id")
-    token_blocked = await add_token_id_to_blocklist(token_id)
-    
-    if token_blocked.get("error"):
-        raise JSONResponse(
-            content={"message": f"an error occurred while logging out: {token_blocked.get("error")}"},
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    return JSONResponse(content={"message": "logged out successfully"}, status_code=status.HTTP_200_OK)
 
 @auth_router.post("/send-mail", status_code=status.HTTP_200_OK)
 async def send_mail(emails: EmailModel):
@@ -157,6 +164,21 @@ async def user_sign_up(user: UserSignUp, session: AsyncSession = Depends(get_asy
 
     return {
         "message": "account created! Check email to verify your account.",
+        "user": results
+    }
+
+@auth_router.post("/users/admin/registration", response_model=Union[UserSignUpResponse, UserExist], status_code=status.HTTP_201_CREATED)
+async def register_admin_user(admin: AdminSignUp, _: Annotated[User, Depends(RoleChecker(["admin"]))], session: AsyncSession = Depends(get_async_session)):
+    results = await user_service.create_user(session=session, user=admin)
+    if not results:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="admin registration failed, try again")
+    if isinstance(results, UserExist):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=results.model_dump())
+    
+    send_password_reset_email(email=admin.email)
+
+    return {
+        "message": "admin account has been created and an email sent to reset their password.",
         "user": results
     }
 
@@ -202,7 +224,7 @@ async def password_reset_request(token: str, password_data: PasswordResetConfirm
         
         return JSONResponse(
             content={"message": "password has been reset successfully."},
-            status_code=status.HTTP_200
+            status_code=status.HTTP_200_OK
         )
     return JSONResponse(
         content={"message": error_message, "error_code": "CE015"},
@@ -239,3 +261,28 @@ async def modify_user(id: str, current_user: Annotated[User, Depends(RoleChecker
     return results
 
 # Add a delete user endpoint
+@auth_router.delete("/users/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(id: str, current_user: Annotated[User, Depends(RoleChecker(["admin", "user"]))], session: AsyncSession = Depends(get_async_session), token_details=Depends(access_token_bearer)):
+    if current_user.role == "user" and str(current_user.id) != id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail={
+                "message": "please provide the correct user id",
+                "error_code": "CE017"
+            }
+        )
+    await user_service.delete_user(session=session, id=id)
+    # e3594ed1-ea14-42d2-ba45-a45853a7dc5d
+    if current_user.role == "user":
+        token_id = token_details.get("token_id")
+        token_blocked = await add_token_id_to_blocklist(token_id)
+        
+        if token_blocked.get("error"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                detail={
+                    "message": f"an error occurred while deleting the user: {token_blocked.get("error")}",
+                    "error_code": "SE002"
+                }
+            )
+    return

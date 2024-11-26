@@ -34,7 +34,5 @@ async def modify_todo_list(id: uuid.UUID, update_data: ToDoListUpdate, session: 
 
 @todo_list_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def destroy_todo_list(id: uuid.UUID, session: AsyncSession = Depends(get_async_session)):
-    results = await ToDoListService(session).delete_todo_list(id=id)
-    if results is None:
-        return
+    await ToDoListService(session).delete_todo_list(id=id)
     return
